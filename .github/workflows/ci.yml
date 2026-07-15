@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore SreTakeHome.sln
+
+      - name: Build
+        run: dotnet build SreTakeHome.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test SreTakeHome.sln --configuration Release --no-build --verbosity normal
+
+      - name: Build Docker image
+        run: docker build -t candidateapi:ci .

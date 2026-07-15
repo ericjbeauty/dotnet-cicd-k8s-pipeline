@@ -1,0 +1,100 @@
+name: CD
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/candidateapi
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore SreTakeHome.sln
+
+      - name: Build
+        run: dotnet build SreTakeHome.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test SreTakeHome.sln -c Release --no-build --verbosity normal
+
+      - name: Pack Contracts NuGet
+        run: dotnet pack src/CandidateApi.Contracts/CandidateApi.Contracts.csproj -c Release -o ./nupkgs --no-build
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image ref
+        id: meta
+        run: |
+          echo "image=${REGISTRY}/${IMAGE_NAME}:sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.image }}
+
+      - name: Publish NuGet to GHCR
+        run: |
+          dotnet nuget add source --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+          dotnet nuget push "./nupkgs/*.nupkg" --source github --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
+
+  deploy-dev:
+    needs: build-test-publish
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+
+      - name: Deploy to dev
+        run: |
+          kubectl create namespace candidate-api-dev || true
+          cd k8s/overlays/dev
+          kubectl kustomize . \
+            | sed "s#ghcr.io/${{ github.repository_owner }}/candidateapi:dev#${{ needs.build-test-publish.outputs.image }}#g" \
+            | kubectl apply -f -
+          kubectl -n candidate-api-dev rollout status deployment/candidate-api --timeout=120s
+
+  deploy-test:
+    needs: [ build-test-publish, deploy-dev ]
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+
+      - name: Promote same image to test
+        run: |
+          kubectl create namespace candidate-api-test || true
+          cd k8s/overlays/test
+          kubectl kustomize . \
+            | sed "s#ghcr.io/${{ github.repository_owner }}/candidateapi:test#${{ needs.build-test-publish.outputs.image }}#g" \
+            | kubectl apply -f -
+          kubectl -n candidate-api-test rollout status deployment/candidate-api --timeout=120s
