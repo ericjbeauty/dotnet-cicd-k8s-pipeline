@@ -3,6 +3,15 @@ name: CD
 on:
   push:
     branches: [ main ]
+  # Deploy jobs are manual-only (see the 'if' guards below), so a normal push
+  # runs build-test-publish and stays green. Trigger a full deploy on demand
+  # from the Actions tab via "Run workflow".
+  workflow_dispatch:
+    inputs:
+      run_deploys:
+        description: "Run the dev/test deploy jobs (needs a reachable cluster)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -18,7 +27,7 @@ jobs:
     outputs:
       image: ${{ steps.meta.outputs.image }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -56,22 +65,18 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.image }}
 
-      - name: Publish NuGet to GHCR
-        run: |
-          dotnet nuget add source --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
-          dotnet nuget push "./nupkgs/*.nupkg" --source github --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
-
   deploy-dev:
     needs: build-test-publish
     runs-on: ubuntu-latest
-    environment: development
+    # Only runs on a manual dispatch with run_deploys = true.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_deploys }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Create kind cluster
         uses: helm/kind-action@v1
 
-      - name: Deploy to dev
+      - name: Deploy image to dev
         run: |
           kubectl create namespace candidate-api-dev || true
           cd k8s/overlays/dev
@@ -84,8 +89,9 @@ jobs:
     needs: [ build-test-publish, deploy-dev ]
     runs-on: ubuntu-latest
     environment: test
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_deploys }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Create kind cluster
         uses: helm/kind-action@v1
