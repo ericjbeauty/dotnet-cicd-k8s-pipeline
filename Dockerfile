@@ -5,7 +5,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy solution + project files first for layer caching
-COPY SreTakeHome.sln global.json ./
+COPY DotnetCicdPipeline.sln global.json ./
 COPY src/CandidateApi/CandidateApi.csproj src/CandidateApi/
 COPY src/CandidateApi.Contracts/CandidateApi.Contracts.csproj src/CandidateApi.Contracts/
 COPY tests/CandidateApi.Tests/CandidateApi.Tests.csproj tests/CandidateApi.Tests/

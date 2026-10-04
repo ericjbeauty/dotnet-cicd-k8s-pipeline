@@ -35,13 +35,13 @@ jobs:
           global-json-file: global.json
 
       - name: Restore
-        run: dotnet restore SreTakeHome.sln
+        run: dotnet restore DotnetCicdPipeline.sln
 
       - name: Build
-        run: dotnet build SreTakeHome.sln -c Release --no-restore
+        run: dotnet build DotnetCicdPipeline.sln -c Release --no-restore
 
       - name: Test
-        run: dotnet test SreTakeHome.sln -c Release --no-build --verbosity normal
+        run: dotnet test DotnetCicdPipeline.sln -c Release --no-build --verbosity normal
 
       - name: Pack Contracts NuGet
         run: dotnet pack src/CandidateApi.Contracts/CandidateApi.Contracts.csproj -c Release -o ./nupkgs --no-build
