@@ -8,8 +8,8 @@
     <Version>1.0.0</Version>
     <Authors>Eric Takor</Authors>
     <Company>Eric Takor</Company>
-    <Description>Contracts for the SRE take-home Candidate API.</Description>
-    <PackageTags>sre;take-home;contracts</PackageTags>
+    <Description>Response contracts for the API service.</Description>
+    <PackageTags>dotnet;contracts;api</PackageTags>
   </PropertyGroup>
 
 </Project>
